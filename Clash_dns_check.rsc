@@ -6,7 +6,7 @@
 :local clashForwardnRule [/ip firewall mangle find comment="Clash-out"];
 
 # import Module
-:local logTag "check_dns"
+:local logTag "Clash_dns_check"
 :local scriptName $logTag
 :global "Module::import"
 if ( !any $"Module::import" ) do={
@@ -26,6 +26,9 @@ $"Module::import" Wecom $scriptName
 :global  scriptLogLevel
 :set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"INFO")
 
+# 微信推送标记，防止重复推送
+:global "CheckDns::WecomMsg"
+
 :set dnsStatus true;
 $logger ("[$logTag] Script $scriptName starting")
 :do {
@@ -33,9 +36,17 @@ $logger ("[$logTag] Script $scriptName starting")
     # 如果 clashDns 获得的解析不是 fake-ip 那证明 DNS 有问题。微信推送处理。
     if ( $result in 198.18.0.0/16 ) do={
         $logger ("[$logTag] google ipaddress:$result is fake-ip.")
+        if ($"CheckDns::WecomMsg" != "NOTSET") do={
+            :set $"CheckDns::WecomMsg" "NOTSET";
+            $"Wecom::send" "clash dns resolution has returned to normal.";
+        }
     } else={
         $logger error ("[$logTag] google ipaddress:$result is not fake-ip.")
-        $"Wecom::send" "Notice! The Google IP queried is not fake-ip, please deal with it in time.";
+        # 防止重复推送
+        if ($"CheckDns::WecomMsg" != "noFakeIP") do={
+            :set $"CheckDns::WecomMsg" "noFakeIP";
+            $"Wecom::send" "Notice! The Google IP queried is not fake-ip, please deal with it in time.";
+        }
     };
 } on-error={
    :set dnsStatus false
