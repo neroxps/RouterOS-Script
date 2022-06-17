@@ -1,27 +1,23 @@
 # 日志记录器
 ## 描述：方便编写脚本的时候，既打印日志到控制台，又可以记录日志。
 ## 使用方法：
-## :local logTag moduleName
 ## :global logger
-## $logger "[$logTag] <debug message>" # 只打印不记录日志
-## $logger [info|warning|error|debug] <[$logTag] log message>
+## $logger <info message> # 只打印不记录日志
+## $logger [info|warning|error|debug] <log message>
 
-# 脚本日志等级
-## modulesLevel 是 array 负责记录当前脚本登记，默认等级是 WARNING
 :global scriptLogLevel; if (!any $scriptLogLevel) do={
     :global scriptLogLevel ({
         "NOTSET"=0;
         "DEBUG"=10;
         "INFO"=20;
         "WARNING"=30;
+        "ERROR"=40;
         "DEFAULT_LEVEL"=30;
         "modulesLevel"={};
     })
 };
 
 # 设置模块输出日志，如果未设定则为 WARNING 级别
-## 使用方法：
-## $"logger::setLevel" moduleName ($scriptLogLevel->"INFO")
 :global "logger::setLevel" do={
     :global scriptLogLevel
     :local logTag "logger::setLevel"
@@ -40,7 +36,7 @@
     # Global import
     :global scriptLogLevel
     
-    # 检查传入变量
+    # Check args
     if ([typeof $1] = "nothing") do={
         :local msg "[warning] [logger] msg is not defined!"
         :put $msg
@@ -66,7 +62,7 @@
         return false
     }
 
-    # 查询当前模块日志级别，如果无法从 msg 提取模块名称，则使用全局默认级别
+    # 查询当前模块日志级别
     :local getLevel do={
         :global scriptLogLevel
         :local moduleName $1; if ($moduleName = false) do={return ($scriptLogLevel->"DEFAULT_LEVEL")}
@@ -92,7 +88,7 @@
     :local moduleName [$getModuleName $msg]
     :local logLevel [$getLevel $moduleName]
     # 没第二参数的话只打印到控制台，不写到日志，此方法默认级别为 debug
-    if (([typeof $type] = "nothing") && ($logLevel <= $scriptLogLevel->"DEBUG")) do={
+    if ((([typeof $type] = "nothing") && ($logLevel <= $scriptLogLevel->"DEBUG")) || ($moduleName = false)) do={
         :put ("[debug] $1")
         return true
     }
