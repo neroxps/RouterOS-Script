@@ -171,9 +171,12 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
     :set wanIpv4Address $ipv4Address;
     :set wanIpv6Prefix $ipv6Prefix;
     if ($useIPv6) do={
-        $"Wecom::send" ("$wanInterfaceName ipv4 address update to $wanIpv4Address, ipv6 suffix update to $wanIpv6Prefix")
+        $"Wecom::send" ("\F0\9F\9F\A6 $wanInterfaceName ipv4 address update to $wanIpv4Address, ipv6 suffix update to $wanIpv6Prefix")
     } else={
-        $"Wecom::send" ("$wanInterfaceName ipv4 address update to $wanIpv4Address")
+        $"Wecom::send" ("\F0\9F\9F\A6 $wanInterfaceName ipv4 address update to $wanIpv4Address")
+    }
+    if ($wanIpv4Address in 100.64.0.0/10) do={
+        $"Wecom::send" ("\E2\9A\A0\EF\B8\8F $wanInterfaceName ipv4 address is $wanIpv4Address, this address is not a public IP address, please contact the telecom operator.")
     }
 } else={
     $logger ("[$logTag] IP address is up to date.")
