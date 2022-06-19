@@ -80,22 +80,22 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     # Function main
     ## 加载配置文件，参数允许传入脚本
     :local inputConfig
-    $logger ("[$logTag] check \$input.")
+    $logger debug ("[$logTag] check \$input.")
     if ([:typeof $input] != "nothing") do={
         $logger ("[$logTag] Apply \$input to inputConfig.")
         :set inputConfig $input
     }
-    $logger ("[$logTag] check incoming parameter.")
+    $logger debug ("[$logTag] check incoming parameter.")
     if ( ([:typeof $inputConfig] = "nothing") && ([:typeof $corpid] = "str") && ([:typeof $corpsecret] = "str") && ([:typeof $agentid] = "str") && ([:typeof $touser] = "array") ) do={
         $logger ("[$logTag] Apply incoming parameter to inputConfig.")
         :set inputConfig {"corpid"=$corpid;"corpsecret"=$corpsecret;"agentid"=$agentid;"touser"=$touser}
     }
-    $logger ("[$logTag] check \$inputConfig.")
+    $logger debug ("[$logTag] check \$inputConfig.")
     if ([$checkConfig $inputConfig]) do={
         $logger ("[$logTag] Apply incoming parameter configuration.")
         :set config $inputConfig
     }
-    $logger ("[$logTag] check \$Wecom::config.")
+    $logger debug ("[$logTag] check \$Wecom::config.")
     if ( ([typeof $config] = "nothing") && ([$checkConfig $"Wecom::config"])) do={
         $logger ("[$logTag] Apply global variable configuration.")
         :set config $"Wecom::config"
@@ -117,7 +117,7 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     }
     # 处理 touser ，将 array 转为 json string
     if ([typeof ($config->"touser")] = "array") do={
-        $logger ("[$logTag] Touser array converted to json string.")
+        $logger debug ("[$logTag] Touser array converted to json string.")
         :local string ""
         :for i from=0 to=([:len ($config->"touser")] - 1) do={
             :set string ($string . "\"$($config->"touser"->$i)\",")
@@ -125,9 +125,10 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :set string [:pick $string 0 ([:len $string] - 1)];
         :set ($config->"touser") $string;
     }
-    $logger ("config:$config, message:$message")
+    :local configStr [:tostr $config;]
+    $logger ("config:$configStr, message:$message")
     if ($"Wecom::sendToWecom" = true) do={
-        $logger info ("[$logTag] WeCom push start.")
+        $logger debug ("[$logTag] WeCom push start.")
         :local wecomGetTokenUrl "https://qyapi.weixin.qq.com/cgi-bin/gettoken\?corpid=$($config->"corpid")&corpsecret=$($config->"corpsecret")";
         :local wecomData ([/tool fetch url=$wecomGetTokenUrl mode=https output=user as-value] ->"data");
         :local tokenStartPos ([tonum [:find $wecomData "token" -1]]+8);
@@ -137,11 +138,13 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :local msg "[From MikroTik] $message"
         :local payload "{\"touser\":$($config->"touser"),\"msgtype\":\"text\",\"agentid\":$($config->"agentid"),\"text\":{\"content\":\"$msg\"},\"safe\":0}";
         :local result [/tool fetch url=$wecomSendUrl mode=https output=user http-method=post http-data=$payload as-value];
+        :local resultStr [:tostr $result;]
+        $logger debug ("[$logTag] Wecom api push result:$resultStr")
         :if ($result->"status" != "finished") do={
             $logger error ("[$logTag] post failed, result=" . $result->"data")
         }
     } else={
-        $logger info ("[$logTag] Wecom::sendToWecom is false.")
+        $logger debug ("[$logTag] Wecom::sendToWecom is false.")
     }
     # remove module
     $"Module::remove" logger $scriptName
