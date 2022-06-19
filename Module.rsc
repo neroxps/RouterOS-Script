@@ -44,6 +44,11 @@
     :global "Module::lock"
     :local moduleName $1
     :local scriptName $2;
+    # 当传入变量带有 "scriptName::functionName" 符号时，裁剪scriptName
+    if (any [find $scriptName "::"]) do={
+        :local keyCount [find $scriptName "::"]
+        :set scriptName [:pick $scriptName 0 $keyCount]
+    }
     :local logTag "$"Module::logTag"::lockModule"
     :local moduleLockList ($"Module::lock"->$moduleName)
     :local keyword ("$scriptName|")
@@ -65,6 +70,11 @@
     :global "Module::lock"
     :local moduleName $1
     :local scriptName $2; if (!any $scriptName) do={:set scriptName "noName"}
+    # 当传入变量带有 "scriptName::functionName" 符号时，裁剪scriptName
+    if (any [find $scriptName "::"]) do={
+        :local keyCount [find $scriptName "::"]
+        :set scriptName [:pick $scriptName 0 $keyCount]
+    }
     :local logTag "$"Module::logTag"::lockModule"
     :local moduleLockList ($"Module::lock"->$moduleName)
     if ($"Module::logLevel" <= 10) do={:put ("[debug] [$logTag] moduleLockList:$moduleLockList")}
@@ -113,7 +123,13 @@
     :global  "Module::lockModule"
     :local logTag ("$"Module::logTag"::import")
     :local module $1
+
     :local scriptName $2
+    # 当传入变量带有 "scriptName::functionName" 符号时，裁剪scriptName
+    if (any [find $scriptName "::"]) do={
+        :local keyCount [find $scriptName "::"]
+        :set scriptName [:pick $scriptName 0 $keyCount]
+    }
     if ($"Module::logLevel" <= 10) do={:put ("[debug] [$logTag] module:$module, scriptName:$scriptName")}
     # 重载模块，除了 Module 自身其余模块均可重载
     if ($reload = true) do={
