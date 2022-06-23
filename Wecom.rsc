@@ -126,7 +126,7 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :set ($config->"touser") $string;
     }
     :local configStr [:tostr $config;]
-    $logger ("config:$configStr, message:$message")
+    $logger debug ("[$logTag] config:$configStr, message:$message")
     if ($"Wecom::sendToWecom" = true) do={
         $logger debug ("[$logTag] WeCom push start.")
         :local wecomGetTokenUrl "https://qyapi.weixin.qq.com/cgi-bin/gettoken\?corpid=$($config->"corpid")&corpsecret=$($config->"corpsecret")";
