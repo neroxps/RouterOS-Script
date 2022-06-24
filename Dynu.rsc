@@ -1,4 +1,5 @@
 # Dynu 更新 DDNS 脚本
+# 脚本依赖 Module logger
 # local variable
 :local logTag "Dynu"
 :local scriptName $logTag
@@ -45,41 +46,6 @@ $logger debug ("[$logTag] Dynu script runing.")
     if (!any $domainName) do={ logger error ("[$logTag] domainName is not defined"); :error}
     if (!any $ipv4Address) do={ logger error ("[$logTag] ipv4Address is not defined"); :error}
 
-    # 向 Dynu 查询 ip 地址是否更新正常
-    :local getDynuRemoteConfig do={
-        :global "Module::import"
-        :local logTag "Dynu::getDynuRemoteConfig"
-        :local scriptName $logTag
-        $"Module::import" logger $scriptName
-        :global logger
-        $"Module::import" JsonParse $scriptName
-        :global "JsonParse::parse"
-        :global "JsonParse::jsonIn"
-        :global "JsonParse::parseOut"
-        :local apiUrl "https://api.dynu.com/v2/dns/$domainId"
-        :local remoteIPv4
-
-        $logger debug ("[$logTag] Dynu config [apiUrl: $apiUrl, domainName: $domainName, domainId: $domainId, apiKey: $apiKey]")
-        :do {
-            :set "JsonParse::jsonIn" ([ /tool fetch url=$apiUrl mode=https output=user http-method=get http-header-field="API-Key:$apiKey,accept:application/json" as-value ]->"data")
-        } on-error={
-            $logger error ("[$logTag] Failed to query IP address")
-            return false
-        }
-        :set "JsonParse::parseOut" [$"JsonParse::parse"]
-        :local parseOut [tostr $"JsonParse::parseOut"]
-        $logger debug ("[$logTag] parseOut:$parseOut ")
-        :set remoteIPv4 ($"JsonParse::parseOut"->"ipv4Address")
-        if ([:typeof [:toip $remoteIPv4]] != "ip") do={
-            $logger error ("[$logTag] Failed to get IP parameters!")
-            return false
-        } else={
-            return true
-        }
-        #$"Module::remove" logger $scriptName
-        $"Module::remove" JsonParse $scriptName
-    }
-
     $logger info ("[$logTag] Start DDNS update.");
     :set apiUrl "https://api.dynu.com/v2/dns/$domainId";
     if ([typeof [:toip6 $ipv6Address]] = "ip6") do={
@@ -100,10 +66,6 @@ $logger debug ("[$logTag] Dynu script runing.")
     if (($result->"data") != "{\"statusCode\":200}") do={
         $logger error ("[$logTag] Failed to update IP address! error:" . $result->"data") 
         return {"result"=false; "logMessage"=("[$logTag] Failed to update IP address! error:" . $result->"data");}
-    }
-    if (![$"getDynuRemoteConfig" domainName=$domainName domainId=$domainId apiKey=$apiKey]) do={
-        $logger error ("[$logTag] The remote IP address is incorrect!");
-        return {"result"=false; "logMessage"=("[$logTag] The remote IP address is incorrect!");}
     }
     $"Module::remove" logger $scriptName
     return {"result"=true;}
