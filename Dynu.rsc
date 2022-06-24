@@ -11,9 +11,9 @@ if ( !any $"Module::import" ) do={
 }
 :global "Module::remove"
 :global scriptLogLevel
-:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"DEBUG")
+:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"INFO")
 
-$logger debug ("[$logTag] Dynu script runing.")
+$logger debug ("[$logTag] Dynu loading.")
 
 # 向 dynu 推送新的 ip 地址
 ## 使用方法：
@@ -46,7 +46,7 @@ $logger debug ("[$logTag] Dynu script runing.")
     if (!any $domainName) do={ logger error ("[$logTag] domainName is not defined"); :error}
     if (!any $ipv4Address) do={ logger error ("[$logTag] ipv4Address is not defined"); :error}
 
-    $logger info ("[$logTag] Start DDNS update.");
+    $logger info ("[$logTag] Start DDNS update. ipv4:$ipv4Address ipv6:$ipv6Address");
     :set apiUrl "https://api.dynu.com/v2/dns/$domainId";
     if ([typeof [:toip6 $ipv6Address]] = "ip6") do={
         set payload "{\"ipv4Address\":\"$ipv4Address\",\"name\": \"$domainName\",\"ipv6Address\":\"$ipv6Address\",\"ttl\": 60,\"ipv4\": true,\"ipv6\": true,\"ipv4WildcardAlias\": true,\"ipv6WildcardAlias\": true}"
