@@ -175,7 +175,7 @@ if (! ($pushResult->"result")) do={
     - `:local ipv4Comment "wan-ip"`
 
   - 如果有多个 pppoe 请指定接口名字,如果希望脚本自动获取请留空即可
-# :local pppoeInterfaceName "<pppoe interface name>"
+    - `:local pppoeInterfaceName "<pppoe interface name>"`
 
 ```
 # DDNS::Config 全局 DDNS 服务商配置
