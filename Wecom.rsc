@@ -18,7 +18,7 @@
 :global "Wecom::sendToWecom"
 if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     :global "Wecom::sendToWecom" true
-    $logger info ("[$logTag] WeCom notification is enable")
+    $logger debug ("[$logTag] WeCom notification is enable")
 }
 
 
