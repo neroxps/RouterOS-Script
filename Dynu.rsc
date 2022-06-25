@@ -3,6 +3,8 @@
 # local variable
 :local logTag "Dynu"
 :local scriptName $logTag
+# 脚本日志级别
+:local logLevel "DEBUG"
 
 # import Module
 :global "Module::import"
@@ -11,7 +13,7 @@ if ( !any $"Module::import" ) do={
 }
 :global "Module::remove"
 :global scriptLogLevel
-:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"INFO")
+:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"$logLevel")
 
 $logger debug ("[$logTag] Dynu loading.")
 
@@ -39,12 +41,35 @@ $logger debug ("[$logTag] Dynu loading.")
     :local result
     :local resultStr
 
+    # 脚本返回函数
+    ## 错误信息记录日志，其余一律返回一个焊油 result 为 true 的 array
+    :local funcReturn do={
+        :global logger
+        :local msg
+        if (any $2 and $1 = "error") do={
+            set msg $2
+            $logger error ("[$logTag] $msg")
+            return {
+                "result"=false;
+                "logMessage"=$msg
+            }
+        }
+        return {"result"=true;}
+    }
+
     # function main
-    # 检查 Function 传入变量是否存在
-    if (!any $apiKey) do={ logger error ("[$logTag] apiKey is not defined"); :error}
-    if (!any $domainId) do={ logger error ("[$logTag] domainId is not defined"); :error}
-    if (!any $domainName) do={ logger error ("[$logTag] domainName is not defined"); :error}
-    if (!any $ipv4Address) do={ logger error ("[$logTag] ipv4Address is not defined"); :error}
+    # 检查 Function 传入变量是否正确
+    if (!any $apiKey) do={ return [ $funcReturn error "apiKey is not defined" ]}
+    if (!any $domainId) do={ return [ $funcReturn error "domainId is not defined" ]}
+    if (!any $domainName) do={ return [ $funcReturn error "domainName is not defined" ]}
+    if (!any $ipv4Address or [typeof [toip $ipv4Address]] != "ip" ) do={ 
+        return [ $funcReturn error "The ipv4Address setting is wrong, please check the configuration." ]
+    }
+    if (any $ipv6Address) do={
+        if ([ typeof [ toip6 $ipv6Address ] ] != "ip6") do={
+            return [ $funcReturn error "The ipv6Address setting is wrong, please check the configuration." ]
+        }
+    }
 
     $logger info ("[$logTag] Start DDNS update. ipv4:$ipv4Address ipv6:$ipv6Address");
     :set apiUrl "https://api.dynu.com/v2/dns/$domainId";
@@ -56,17 +81,16 @@ $logger debug ("[$logTag] Dynu loading.")
     :set header "API-Key:$apiKey,accept:application/json"
     $logger debug ("[$logTag] apiUrl:$apiUrl, header:$header payload:$payload");
     do {
+        $logger debug ("[$logTag] tool fetch url=$apiUrl mode=https output=user http-method=post http-header-field=$header http-data=$payload as-value")
         set result [/tool fetch url=$apiUrl mode=https output=user http-method=post http-header-field=$header http-data=$payload as-value]
         set resultStr [:tostr $result]
     } on-error={
-        $logger error ("[$logTag] Failed to update IP address! result:$resultStr") 
-        return {"result"=false; "logMessage"=("[$logTag] Failed to update IP address! result:$resultStr");}
+        return [$funcReturn error "Failed to update IP address!"]
     }
     $logger debug ("[$logTag] result:$resultStr");
     if (($result->"data") != "{\"statusCode\":200}") do={
-        $logger error ("[$logTag] Failed to update IP address! error:" . $result->"data") 
-        return {"result"=false; "logMessage"=("[$logTag] Failed to update IP address! error:" . $result->"data");}
+        return [$funcReturn error ("Failed to update IP address! error:" . $result->"data")]
     }
     $"Module::remove" logger $scriptName
-    return {"result"=true;}
+    return [$funcReturn]
 }
