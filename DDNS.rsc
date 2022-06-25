@@ -1,16 +1,35 @@
 # 脚本依赖：Module logger Wecom Dynu
 
-# Dynu 配置信息
-    # apiKey:访问以下网站获取 dynuApiKey https://www.dynu.com/en-US/ControlPanel/APICredentials
-    # domainId:通过以下 Linux 命令获取你域名的 id
-    #    curl -X GET https://api.dynu.com/v2/dns -H "accept: application/json" -H "API-Key: <这里写你的 APIKEY>"
-    # domainName:就是你获得的 ddns 域名
-:local dynuConfig {
-    "apiKey"="<apiKey>";
-    "domainId"="<domainId>";
-    "domainName"="<domainName>";
+# DDNS::Config 全局 DDNS 服务商配置
+    # ddnsServices: 数组，是否启用某个 ddns 服务，enable 则启用，其余字符串一律不启用
+    # Dynu 配置信息
+        # apiKey:访问以下网站获取 dynuApiKey https://www.dynu.com/en-US/ControlPanel/APICredentials
+        # domainId:通过以下 Linux 命令获取你域名的 id
+        #    curl -X GET https://api.dynu.com/v2/dns -H "accept: application/json" -H "API-Key: <这里写你的 APIKEY>"
+        # domainName:就是你获得的 ddns 域名
+    # pubyun 配置信息（该服务商不支持 ipv6）
+        # user：注册用户名
+        # password： 密码
+        # domain：DDNS 域名
+:global "DDNS::Config" {
+    "ddnsServices"={
+        "dynu"="enable";
+        "pubyun"="disable"
+    };
+    "dynu"={
+        "apiKey"="<apiKey>";
+        "domainId"="<domainId>";
+        "domainName"="<domainName>";
+    };
+    "pubyun"={
+        "user"="<yourUserName>";
+        "password"="<yourPassword>";
+        "domain"="<yourDomain>"
+    };
 }
 
+# 脚本日志级别
+:local logLevel "DEBUG"
 # 是否使用 IPV6
 :local useIPv6 true
 # 这是你需要对外服务器 IPV6 主机位
@@ -28,10 +47,52 @@
 
 # 只需要修改上面的参数
 
+# ddns 服务商推送脚本调用
+:local updateScripts {
+    "dynu"=":put \"runScript runing\"
+            :global \"Module::import\"
+            \$\"Module::import\" Dynu \$scriptName
+            :global \"Dynu::push\"
+            :global \"DDNS::Config\"
+            :local config (\$\"DDNS::Config\"->\"dynu\")
+            :local result
+            set result [\$\"Dynu::push\" apiKey=(\$config->\"apiKey\") domainId=(\$config->\"domainId\") domainName=(\$config->\"domainName\") ipv4Address=\$ipv4Address ipv6Address=\$ipv6Address]
+            :global \"Module::remove\"
+            \$\"Module::remove\" Dynu \$scriptName
+            return \$result";
+    "pubyun"=":global \"DDNS::Config\";
+            :local result
+            :local config (\$\"DDNS::Config\"->\"pubyun\")
+            :put [:tostr \$config]
+            :local apiUrl \"http://members.3322.org/dyndns/update\?\"
+            :local payload (\"hostname=\" . (\$config->\"domain\") . \"&myip=\" . \$ipv4Address)
+            :set apiUrl (\$apiUrl . \$payload)
+            do {
+                set result [/tool fetch url=\$apiUrl mode=http user=(\$config->\"user\") password=(\$config->\"password\") output=user as-value]
+            } on-error={
+                return {
+                    \"result\"=false;
+                    \"logMessage\"=\"Failed to update IP address!\";
+                }
+            }
+            if ( [typeof [ find (\$result->\"data\") \"good\" ]] != \"num\" )do={
+                if ([typeof [ find (\$result->\"data\") \"nochg\" ]] != \"num\" ) do={
+                    return {
+                        \"result\"=false;
+                        \"logMessage\"=(\"Failed to update IP address! \" . (\$result->data));
+                    }
+                }
+            }
+            return {
+                \"result\"=true;
+            }"
+}
+
 # import global variable
 :global wanIpv4Address;
 :global wanIpv6Prefix;
-
+# 微信推送标记，防止重复推送
+:global "DDNS::WecomMsg" ({})
 # local variable
 :local logTag "DDNS"
 :local scriptName $logTag
@@ -46,11 +107,9 @@ $"Module::import" logger $scriptName
 :global logger
 $"Module::import" Wecom $scriptName
 :global "Wecom::send"
-$"Module::import" Dynu $scriptName
-:global "Dynu::push"
 # 设置模块日志级别-如果需要 debug 模块请取消注释，在控制台执行脚本
 :global  scriptLogLevel
-:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"DEBUG")
+:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"$logLevel")
 
 # 将 wan ip 加入 firewall address-list 方便做防火墙策略
 :local addToAddresList do={
@@ -121,17 +180,30 @@ if ($useIPv6) do={
 $logger ("[$logTag] ipv4G:$wanIpv4Address, ipv4L:$ipv4Address")
 $logger ("[$logTag] ipv6G:$wanIpv6Prefix, ipv6L:$ipv6Prefix")
 if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
-    :local pushResult
+
     # 将 ip 地址放入 address-list 方便做策略
     if ($isAddToAddressList) do={
         $addToAddresList $ipv4Address $ipv4Comment
         if ($useIPv6) do={$addToAddresList $ipv6Address $ipv6Comment}
     }
 
-    set pushResult [$"Dynu::push" apiKey=($dynuConfig->"apiKey") domainId=($dynuConfig->"domainId") domainName=($dynuConfig->"domainName") ipv4Address=$ipv4Address ipv6Address=$ipv6Address]
-    if (! ($pushResult->"result")) do={
-        $logger error ("[$logTag] Failed to submit address to Dynu.")
-        :error message=($pushResult->"logMessage")
+    # 更新所有 ddns 服务
+    :foreach ddnsServiceName,isEnable in=($"DDNS::Config"->"ddnsServices") do={
+        if ($isEnable = "enable" || $isEnable = "ENABLE") do={
+            :local scriptResult
+            :local ddnsRun [:parse ($updateScripts->$ddnsServiceName);]
+            set scriptResult [$ddnsRun  ipv4Address=$ipv4Address ipv6Address=$ipv6Address scriptName=$scriptName]
+            if (! ($scriptResult->"result")) do={
+                $logger error ("[$logTag] " . ($scriptResult->"logMessage"))
+                if (($"DDNS::WecomMsg"->"$ddnsServiceName") = "NOTSET") do={
+                    $"Wecom::send" ("\E2\9A\A0\EF\B8\8F DDNS Service [$ddnsServiceName] update fail! Log messige:" . ($scriptResult->"logMessage"))
+                    set ($"DDNS::WecomMsg"->"$ddnsServiceName") "DDNS update fail!"
+                }
+                :error message=("[$ddnsServiceName] error:" . ($scriptResult->"logMessage"))
+            } else {
+                set ($"DDNS::WecomMsg"->"$ddnsServiceName") "NOTSET"
+            }
+        }
     }
     :set wanIpv4Address $ipv4Address;
     if ($useIPv6) do={
@@ -144,7 +216,7 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
         $"Wecom::send" ("\E2\9A\A0\EF\B8\8F $wanInterfaceName ipv4 address is $wanIpv4Address, this address is not a public IP address, please contact the telecom operator.")
     }
 } else={
-    $logger ("[$logTag] IP address is up to date.")
+    $logger debug ("[$logTag] IP address is up to date.")
 }
 
 # Remove module
