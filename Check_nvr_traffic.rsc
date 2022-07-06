@@ -1,5 +1,5 @@
 # 请手动添加添加 firware L7 协议识别
-## /ip firewall layer7-protocol add name=ezviz regexp="^.+\\x80\\x60.+\\x01.+"
+## /ip firewall layer7-protocol add name=ezviz regexp="^.+(IMKH|EzNz).+"
 ## /ip firewall add action=accept chain=forward comment=ezviz layer7-protocol=ezviz log-prefix=ezviz src-address=<这里写你的NVRIP地址>
 
 # 流量阈值 这里是 100Kbps
