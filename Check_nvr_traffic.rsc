@@ -12,7 +12,7 @@
 :local trafficCount
 
 # 获取符合流量数
-:global getThresholdExceedCount do={
+:local getThresholdExceedCount do={
     :local count
     :do {
     set count [/ip firewall connection print count-only where ( src-address ~ $IpAddress orig-rate>$threshold)]
