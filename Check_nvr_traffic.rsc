@@ -1,9 +1,9 @@
 # 请手动添加添加 firware L7 协议识别
-## /ip firewall layer7-protocol add name=ezviz regexp="^.+(IMKH|EzNz).+"
-## /ip firewall add action=accept chain=forward comment=ezviz layer7-protocol=ezviz log-prefix=ezviz src-address=<这里写你的NVRIP地址>
+## /ip firewall layer7-protocol add name=ezviz2 regexp="(\\x05\\x20\\x52.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?\\x71\\x01)|(IMKH)"
+## /ip firewall add action=add-dst-to-address-list address-list=ezviz_dst address-list-timeout=1m chain=forward comment=ezviz layer7-protocol=ezviz2 log-prefix=ezviz src-address=<这里写你的NVRIP地址>
 
-# 流量阈值 这里是 200Kbps
-:local trafficThreshold 20240
+# 流量阈值 这里是 200Kbps=200*1000
+:local trafficThreshold (200*1000)
 # 监控的IP地址
 :local ezvizIpAddress "10.89.2.1"
 :local mqttBroker "hass"
@@ -15,28 +15,109 @@
 
 # 根据实时流量阈值筛选链接
 # 调用方法：$getConnections IpAddress="10.89.2.1" threshold=10240
+# :local getConnections do={
+#     :local id1 ({})
+#     :local id2 ({})
+#     :local id ({})
+#     :local checkCount 0
+#     :local connections ({})
+#     :local getIp do={
+#         return [:pick $1 0 [:find $1 ":"]]
+#     }
+#     :local getPort do={
+#         return [:pick $1 ([:find $1 ":"] + 1) [:len $1]]
+#     }
+#     # 比较两个数组，返回一致的元素
+#     :local compareArrays do={
+#         :local arr1 $1
+#         :local arr2 $2
+#         :local arr ({})
+#         :local pos 0;
+#         :foreach v in=$arr2 do={
+#             :local p [:find $arr1 $v]
+#             :if ([:type $p]!="nil") do={
+#                 set ($arr->$pos) $v
+#                 set pos ($pos + 1)
+#             }
+#         }
+#         return $arr
+#     }
+#     :do {
+#         # 连续对比2次，如果两次结果都达到阈值
+#         :while ( ($checkCount < 2) && ([:len $id] = 0) ) do={
+#             :set id1 [/ip firewall connection find where (src-address ~ $IpAddress orig-rate > $threshold) ]
+#             :delay 1s;
+#             :set id2 [/ip firewall connection find where (src-address ~ $IpAddress orig-rate > $threshold) ]
+#             :put "id1:$id1, id2:$id2"
+#             if ( ([:len $id1] > 0) && ([:len $id2] > 0) ) do={
+#                 :set id [$compareArrays $id1 $id2]
+#             }
+#             :set checkCount ($checkCount + 1)
+#         }
+#         :if ([:len id] = 0) do={
+#             return $connections
+#         }
+#         :for i from=0 to=([:len $id] - 1) do={ 
+#             :local dstAddress [/ip firewall connection get value-name="dst-address" ($id->$i)]
+#             :local protocol [/ip firewall connection get value-name="protocol" ($id->$i)]
+#             :local origRate [/ip firewall connection get value-name="orig-rate" ($id->$i)]
+#             set ($connections->$i) {"ip"=[$getIp $dstAddress];"port"=[$getPort $dstAddress];"protocol"=$protocol;"origRate"=$origRate;}
+#          }
+#     } on-error={
+#         return $connections
+#     }
+#     return $connections
+# }
+
+# 根据实时流量阈值筛选链接
+# 调用方法：$getConnections threshold=(200*1000)
 :local getConnections do={
-    :local id
     :local connections ({})
+    :local conPos 0
+    :local dstIps
     :local getIp do={
         return [:pick $1 0 [:find $1 ":"]]
     }
     :local getPort do={
         return [:pick $1 ([:find $1 ":"] + 1) [:len $1]]
     }
-    :do {
-        set id [/ip firewall connection find where (src-address ~ $IpAddress orig-rate>$threshold)]
-        if ([:len $id] = 0) do={
-            :put "No matching connection found."
-            return $connections
+    # 获得有效的IP
+    :local getVaildIp do={
+        :local ids [/ip firewall address-list find where (list="ezviz_dst")]
+        :local ips ({})
+        :local pos 0
+        :local checkPrivateIp do={
+            if ( ($1 in "192.168.0.0/16") || ($1 in "10.0.0.0/8") || ($1 in "172.16.0.0/12") ) do={
+                return 0
+            }
+            return 1
         }
-        :for i from=0 to=([:len $id] - 1) do={ 
-            :local dstAddress [/ip firewall connection get value-name="dst-address" ($id->$i)]
-            :local protocol [/ip firewall connection get value-name="protocol" ($id->$i)]
-            set ($connections->$i) {"ip"=[$getIp $dstAddress];"port"=[$getPort $dstAddress];"protocol"=$protocol}
-         }
-    } on-error={
+        :foreach id in=$ids do={
+            :local ip [/ip firewall address-list get value-name="address" $id]
+            if ([$checkPrivateIp $ip] = 1) do={
+                :set ($ips->$pos) $ip
+                :set pos ($pos+1)
+            }
+        }
+        return $ips
+    }
+    :set dstIps [$getVaildIp]
+    if ([:len $dstIps] = 0) do={
         return $connections
+    }
+    # 检查当前目的 IP 地址列表流量，超过阈值则加入 connections 数组
+    :foreach dstIp in=$dstIps do={
+        :local ids [/ip firewall connection find where (dst-address ~ $dstIp orig-rate > $threshold) ]
+        :put ("Match rule ids count:" . [:len $ids])
+        if ([:len $ids] > 0) do={
+            :foreach id in=$ids do={
+                :local dstAddress [/ip firewall connection get value-name="dst-address" $id]
+                :local protocol [/ip firewall connection get value-name="protocol" $id]
+                :local origRate [/ip firewall connection get value-name="orig-rate" $id]
+                set ($connections->$conPos) {"ip"=[$getIp $dstAddress];"port"=[$getPort $dstAddress];"protocol"=$protocol;"origRate"=$origRate;}
+                set conPos ($conPos + 1)
+            }
+        }
     }
     return $connections
 }
@@ -49,7 +130,8 @@
         :local ip ($connection->"ip")
         :local port ($connection->"port")
         :local protocol ($connection->"protocol")
-        :local arrayString "{\"ip\":\"$ip\",\"port\":\"$port\",\"protocol\":\"$protocol\"}"
+        :local origRate ($connection->"origRate")
+        :local arrayString "{\"ip\":\"$ip\",\"port\":\"$port\",\"protocol\":\"$protocol\",\"origRate\":\"$origRate\"}"
         :set jsonString ($jsonString . "$arrayString,")
     }
     :set jsonString ([:pick $jsonString 0 ( [:len $jsonString] - 1 )] . "]")
