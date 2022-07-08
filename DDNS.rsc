@@ -2,6 +2,7 @@
 
 # DDNS::Config 全局 DDNS 服务商配置
     # ddnsServices: 数组，是否启用某个 ddns 服务，enable 则启用，其余字符串一律不启用
+    # 同个服务多个配置可以使用 dynu_1 dynu_2 这种写法，ddnsService 里面也需要修改对应名称。
     # Dynu 配置信息
         # apiKey:访问以下网站获取 dynuApiKey https://www.dynu.com/en-US/ControlPanel/APICredentials
         # domainId:通过以下 Linux 命令获取你域名的 id
@@ -13,13 +14,21 @@
         # domain：DDNS 域名
 :global "DDNS::Config" {
     "ddnsServices"={
-        "dynu"="enable";
+        "dynu_1"="enable";
+        "dynu_2"="enable";
         "pubyun"="disable"
     };
-    "dynu"={
+    "dynu_1"={
         "apiKey"="<apiKey>";
         "domainId"="<domainId>";
         "domainName"="<domainName>";
+        "useIpv6"=true;
+    };
+    "dynu_2"={
+        "apiKey"="<apiKey>";
+        "domainId"="<domainId>";
+        "domainName"="<domainName>";
+        "useIpv6"=false;
     };
     "pubyun"={
         "user"="<yourUserName>";
@@ -54,15 +63,22 @@
             \$\"Module::import\" Dynu \$scriptName
             :global \"Dynu::push\"
             :global \"DDNS::Config\"
-            :local config (\$\"DDNS::Config\"->\"dynu\")
+            :local config (\$\"DDNS::Config\"->\$configName)
+            :local useIpv6 (\$config->\"useIpv6\")
             :local result
-            set result [\$\"Dynu::push\" apiKey=(\$config->\"apiKey\") domainId=(\$config->\"domainId\") domainName=(\$config->\"domainName\") ipv4Address=\$ipv4Address ipv6Address=\$ipv6Address]
+            :put \"ipv6:\$ipv6Address\"
+            :if (\$useIpv6 = \"false\") do={
+                :put \"ipv6 disable\";
+                set result [\$\"Dynu::push\" apiKey=(\$config->\"apiKey\") domainId=(\$config->\"domainId\") domainName=(\$config->\"domainName\") ipv4Address=\$ipv4Address]
+            } else={
+                set result [\$\"Dynu::push\" apiKey=(\$config->\"apiKey\") domainId=(\$config->\"domainId\") domainName=(\$config->\"domainName\") ipv4Address=\$ipv4Address ipv6Address=\$ipv6Address]
+            }
             :global \"Module::remove\"
             \$\"Module::remove\" Dynu \$scriptName
-            return \$result";
+            return \$result"
     "pubyun"=":global \"DDNS::Config\";
             :local result
-            :local config (\$\"DDNS::Config\"->\"pubyun\")
+            :local config (\$\"DDNS::Config\"->\$configName)
             :put [:tostr \$config]
             :local apiUrl \"http://members.3322.org/dyndns/update\?\"
             :local payload (\"hostname=\" . (\$config->\"domain\") . \"&myip=\" . \$ipv4Address)
@@ -177,8 +193,8 @@ if ($useIPv6) do={
     :set ipv6Address "$ipv6Prefix:$ipv6Suffix"
 }
 
-$logger ("[$logTag] ipv4G:$wanIpv4Address, ipv4L:$ipv4Address")
-$logger ("[$logTag] ipv6G:$wanIpv6Prefix, ipv6L:$ipv6Prefix")
+$logger debug ("[$logTag] ipv4G:$wanIpv4Address, ipv4L:$ipv4Address")
+$logger debug ("[$logTag] ipv6G:$wanIpv6Prefix, ipv6L:$ipv6Prefix")
 if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
 
     # 将 ip 地址放入 address-list 方便做策略
@@ -190,9 +206,17 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
     # 更新所有 ddns 服务
     :foreach ddnsServiceName,isEnable in=($"DDNS::Config"->"ddnsServices") do={
         if ($isEnable = "enable" || $isEnable = "ENABLE") do={
+            # 如果 ddnsServiceName 是 "dynu_1" 这种格式，则需提取服务
+            :local name
+            if ([:find $ddnsServiceName "_"]) do={
+                :set name [:pick $ddnsServiceName 0 [find $ddnsServiceName "_"]]
+            } else={
+                :set name $ddnsServiceName
+            }
+            $logger debug ("[$logTag] configName is $name")
             :local scriptResult
-            :local ddnsRun [:parse ($updateScripts->$ddnsServiceName);]
-            set scriptResult [$ddnsRun  ipv4Address=$ipv4Address ipv6Address=$ipv6Address scriptName=$scriptName]
+            :local ddnsRun [:parse ($updateScripts->$name);]
+            set scriptResult [$ddnsRun  ipv4Address=$ipv4Address ipv6Address=$ipv6Address scriptName=$scriptName configName=$ddnsServiceName]
             if (! ($scriptResult->"result")) do={
                 $logger error ("[$logTag] " . ($scriptResult->"logMessage"))
                 if (($"DDNS::WecomMsg"->"$ddnsServiceName") = "NOTSET") do={
