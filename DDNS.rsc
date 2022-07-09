@@ -227,6 +227,8 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
             } else {
                 set ($"DDNS::WecomMsg"->"$ddnsServiceName") "NOTSET"
             }
+            # 同一服务商请求过快会导致请求失败
+            :delay 2s;
         }
     }
     :set wanIpv4Address $ipv4Address;
