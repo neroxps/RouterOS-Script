@@ -141,14 +141,24 @@
             }
             return false
         }
-        :local getCountry do={
+        # :local getCountry do={
+        #     :local json $1
+        #     :local country [:pick $json ([:find $json "\"country\":\""] + 11) [:find $json "\",\"countryCode\""]]
+        #     return $country
+        # }
+        :local getCountryCode do={
             :local json $1
-            :local country [:pick $json ([:find $json "\"country\":\""] + 11) [:find $json "\",\"countryCode\""]]
+            :local country [:pick $json ([:find $json "\"countryCode\":\""] + 15) [:find $json "\",\"region\""]]
             return $country
         }
-        :local getRegionName do={
+        # :local getRegionName do={
+        #     :local json $1
+        #     :local regionName [:pick $json ([:find $json "\"regionName\":\""] + 14) [:find $json "\",\"city\""]]
+        #     return $regionName
+        # }
+        :local getRegion do={
             :local json $1
-            :local regionName [:pick $json ([:find $json "\"regionName\":\""] + 14) [:find $json "\",\"city\""]]
+            :local regionName [:pick $json ([:find $json "\"region\":\""] + 10) [:find $json "\",\"regionName\""]]
             return $regionName
         }
         :local getCity do={
@@ -164,7 +174,7 @@
             return "Failed"
         }
         :set data ($result->"data")
-        return ([$getCountry $data] . "." . [$getRegionName $data] . "." . [$getCity $data])
+        return ([$getCountryCode $data] . "." . [$getRegion $data] . "." . [$getCity $data])
     }
     :foreach connection in=$connections do={
         :local ip ($connection->"ip")
