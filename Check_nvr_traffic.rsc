@@ -2,8 +2,8 @@
 ## /ip firewall layer7-protocol add name=ezviz2 regexp="(\\x05\\x20\\x52.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?\\x71\\x01)|(IMKH)"
 ## /ip firewall add action=add-dst-to-address-list address-list=ezviz_dst address-list-timeout=1m chain=forward comment=ezviz layer7-protocol=ezviz2 log-prefix=ezviz src-address=<这里写你的NVRIP地址>
 
-# 流量阈值 这里是 200Kbps=200*1000
-:local trafficThreshold (200*1000)
+# 流量阈值 这里是 2Mbps=2*1000*1000
+:local trafficThreshold (2*1000*1000)
 # 监控的IP地址
 :local ezvizIpAddress "10.89.2.1"
 :local mqttBroker "hass"
@@ -74,7 +74,7 @@
 :local getConnections do={
     :local connections ({})
     :local conPos 0
-    :local dstIps
+    :global dstIps
     :local getIp do={
         return [:pick $1 0 [:find $1 ":"]]
     }
@@ -107,6 +107,7 @@
     }
     # 检查当前目的 IP 地址列表流量，超过阈值则加入 connections 数组
     :foreach dstIp in=$dstIps do={
+        :put "Find ip $dstIp"
         :local ids [/ip firewall connection find where (dst-address ~ $dstIp orig-rate > $threshold) ]
         :put ("Match rule ids count:" . [:len $ids])
         if ([:len $ids] > 0) do={
@@ -126,12 +127,52 @@
 :local convertConnectionsToJsonString do={
     :local connections $1
     :local jsonString "["
+    # 查询 ip 归属地
+    :local getIpRegion do={
+        :local ip $1
+        :local result
+        :local data
+        :local apiUrl "http://ip-api.com/json/$ip"
+        :local checkStatus do={
+            :local json $1
+            :local status [:pick $json ([:find $json "\"status\""] + 10) [:find $json "\",\"country\""]]
+            if ($status = "success") do={
+                return true
+            }
+            return false
+        }
+        :local getCountry do={
+            :local json $1
+            :local country [:pick $json ([:find $json "\"country\":\""] + 11) [:find $json "\",\"countryCode\""]]
+            return $country
+        }
+        :local getRegionName do={
+            :local json $1
+            :local regionName [:pick $json ([:find $json "\"regionName\":\""] + 14) [:find $json "\",\"city\""]]
+            return $regionName
+        }
+        :local getCity do={
+            :local json $1
+            :local city [:pick $json ([:find $json "\"city\":\""] + 8) [:find $json "\",\"zip\""]]
+            return $city
+        }
+        set result [/tool fetch url=$apiUrl mode=https output=user as-value]
+        if ( (($result->"status") != "finished") || (! [$checkStatus ($result->"data")]) ) do={
+            if ([:len ($result->"data")] > 0) do={
+                :put ($result->"data")
+            }
+            return "Failed"
+        }
+        :set data ($result->"data")
+        return ([$getCountry $data] . "." . [$getRegionName $data] . "." . [$getCity $data])
+    }
     :foreach connection in=$connections do={
         :local ip ($connection->"ip")
         :local port ($connection->"port")
         :local protocol ($connection->"protocol")
         :local origRate ($connection->"origRate")
-        :local arrayString "{\"ip\":\"$ip\",\"port\":\"$port\",\"protocol\":\"$protocol\",\"origRate\":\"$origRate\"}"
+        :local ipRegion [$getIpRegion $ip]
+        :local arrayString "{\"ip\":\"$ip\",\"port\":\"$port\",\"protocol\":\"$protocol\",\"origRate\":\"$origRate\",\"ipRegion\":\"$ipRegion\"}"
         :set jsonString ($jsonString . "$arrayString,")
     }
     :set jsonString ([:pick $jsonString 0 ( [:len $jsonString] - 1 )] . "]")
