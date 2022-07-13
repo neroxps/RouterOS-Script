@@ -1,5 +1,5 @@
 # 请手动添加添加 firware L7 协议识别
-## /ip firewall layer7-protocol add name=ezviz2 regexp="(\\x05\\x20\\x52.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?\\x71\\x01)|(IMKH)"
+## /ip firewall layer7-protocol add name=ezviz2 regexp="(\\x05\\x20\\x52.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?.\?\\x71\\x01)|IMKH"
 ## /ip firewall add action=add-dst-to-address-list address-list=ezviz_dst address-list-timeout=1m chain=forward comment=ezviz layer7-protocol=ezviz2 log-prefix=ezviz src-address=<这里写你的NVRIP地址>
 
 # 流量阈值 这里是 2Mbps=2*1000*1000
