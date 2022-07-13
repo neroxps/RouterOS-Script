@@ -74,7 +74,7 @@
 :local getConnections do={
     :local connections ({})
     :local conPos 0
-    :global dstIps
+    :local dstIps
     :local getIp do={
         return [:pick $1 0 [:find $1 ":"]]
     }
@@ -83,18 +83,18 @@
     }
     # 获得有效的IP
     :local getVaildIp do={
-        :local ids [/ip firewall address-list find where (list="ezviz_dst")]
+        :local ipaddrIds [/ip firewall address-list find where (list="ezviz_dst")]
         :local ips ({})
         :local pos 0
         :local checkPrivateIp do={
             if ( ($1 in "192.168.0.0/16") || ($1 in "10.0.0.0/8") || ($1 in "172.16.0.0/12") ) do={
-                return 0
+                return false
             }
-            return 1
+            return true
         }
-        :foreach id in=$ids do={
+        :foreach id in=$ipaddrIds do={
             :local ip [/ip firewall address-list get value-name="address" $id]
-            if ([$checkPrivateIp $ip] = 1) do={
+            if ([$checkPrivateIp $ip]) do={
                 :set ($ips->$pos) $ip
                 :set pos ($pos+1)
             }
@@ -108,9 +108,11 @@
     # 检查当前目的 IP 地址列表流量，超过阈值则加入 connections 数组
     :foreach dstIp in=$dstIps do={
         :put "Find ip $dstIp"
+        :put "threshold:$threshold"
         :local ids [/ip firewall connection find where (dst-address ~ $dstIp orig-rate > $threshold) ]
         :put ("Match rule ids count:" . [:len $ids])
         if ([:len $ids] > 0) do={
+            :put ("ids:" . [tostr $ids])
             :foreach id in=$ids do={
                 :local dstAddress [/ip firewall connection get value-name="dst-address" $id]
                 :local protocol [/ip firewall connection get value-name="protocol" $id]
