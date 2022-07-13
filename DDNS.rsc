@@ -47,8 +47,11 @@
 :local ipv6Suffix "<ipv6Suffix>"
 # 是否把 ip 地址添加到防火墙 Address-list中，方便做一些防火墙策略，例如 nat loopback
 :local isAddToAddressList true
-# 可选，设置 Address-list 的 comment
-:local ipv6Comment "wan-ipv6"
+# 支持多组 ipv6 和 comment，写法是 key 为 comment， ipv6 后缀为 value 
+:local ipv6AddToAddress {
+    "wan-ipv6-1"="42d:6dff:fbf3:f2e2";
+    "wan-ipv6-2"="42d:6dff:fbf3:ff22"
+}
 :local ipv4Comment "wan-ip"
 
 # 如果有多个 pppoe 请指定接口名字,如果希望脚本自动获取请留空即可
@@ -200,7 +203,11 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
     # 将 ip 地址放入 address-list 方便做策略
     if ($isAddToAddressList) do={
         $addToAddresList $ipv4Address $ipv4Comment
-        if ($useIPv6) do={$addToAddresList $ipv6Address $ipv6Comment}
+        if ($useIPv6) do={
+            foreach ipv6Comment,ipv6Suffix in=$ipv6AddToAddress do={
+                $addToAddresList ("$ipv6Prefix:$ipv6Suffix") $ipv6Comment
+            }
+        }
     }
 
     # 更新所有 ddns 服务
