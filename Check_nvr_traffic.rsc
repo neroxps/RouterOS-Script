@@ -3,76 +3,20 @@
 ## /ip firewall add action=add-dst-to-address-list address-list=ezviz_dst address-list-timeout=1m chain=forward comment=ezviz layer7-protocol=ezviz2 log-prefix=ezviz src-address=<这里写你的NVRIP地址>
 
 # 流量阈值 这里是 2Mbps=2*1000*1000
-:local trafficThreshold (2*1000*1000)
+:local trafficThreshold (1*1000*1000)
 # 监控的IP地址
 :local ezvizIpAddress "10.89.2.1"
 :local mqttBroker "hass"
 :local TRUE 1
 :local FALSE 0
 :global "nvr::nvrRemoteLink";
-:local connections
+:local connectionArray
 :local connectionCount
-
-# 根据实时流量阈值筛选链接
-# 调用方法：$getConnections IpAddress="10.89.2.1" threshold=10240
-# :local getConnections do={
-#     :local id1 ({})
-#     :local id2 ({})
-#     :local id ({})
-#     :local checkCount 0
-#     :local connections ({})
-#     :local getIp do={
-#         return [:pick $1 0 [:find $1 ":"]]
-#     }
-#     :local getPort do={
-#         return [:pick $1 ([:find $1 ":"] + 1) [:len $1]]
-#     }
-#     # 比较两个数组，返回一致的元素
-#     :local compareArrays do={
-#         :local arr1 $1
-#         :local arr2 $2
-#         :local arr ({})
-#         :local pos 0;
-#         :foreach v in=$arr2 do={
-#             :local p [:find $arr1 $v]
-#             :if ([:type $p]!="nil") do={
-#                 set ($arr->$pos) $v
-#                 set pos ($pos + 1)
-#             }
-#         }
-#         return $arr
-#     }
-#     :do {
-#         # 连续对比2次，如果两次结果都达到阈值
-#         :while ( ($checkCount < 2) && ([:len $id] = 0) ) do={
-#             :set id1 [/ip firewall connection find where (src-address ~ $IpAddress orig-rate > $threshold) ]
-#             :delay 1s;
-#             :set id2 [/ip firewall connection find where (src-address ~ $IpAddress orig-rate > $threshold) ]
-#             :put "id1:$id1, id2:$id2"
-#             if ( ([:len $id1] > 0) && ([:len $id2] > 0) ) do={
-#                 :set id [$compareArrays $id1 $id2]
-#             }
-#             :set checkCount ($checkCount + 1)
-#         }
-#         :if ([:len id] = 0) do={
-#             return $connections
-#         }
-#         :for i from=0 to=([:len $id] - 1) do={ 
-#             :local dstAddress [/ip firewall connection get value-name="dst-address" ($id->$i)]
-#             :local protocol [/ip firewall connection get value-name="protocol" ($id->$i)]
-#             :local origRate [/ip firewall connection get value-name="orig-rate" ($id->$i)]
-#             set ($connections->$i) {"ip"=[$getIp $dstAddress];"port"=[$getPort $dstAddress];"protocol"=$protocol;"origRate"=$origRate;}
-#          }
-#     } on-error={
-#         return $connections
-#     }
-#     return $connections
-# }
 
 # 根据实时流量阈值筛选链接
 # 调用方法：$getConnections threshold=(200*1000)
 :local getConnections do={
-    :local connections ({})
+    :local connections [:toarray "";]
     :local conPos 0
     :local dstIps
     :local getIp do={
@@ -103,13 +47,18 @@
     }
     :set dstIps [$getVaildIp]
     if ([:len $dstIps] = 0) do={
-        return $connections
+        return ({})
     }
     # 检查当前目的 IP 地址列表流量，超过阈值则加入 connections 数组
     :foreach dstIp in=$dstIps do={
         :put "Find ip $dstIp"
         :put "threshold:$threshold"
-        :local ids [/ip firewall connection find where (dst-address ~ $dstIp orig-rate > $threshold) ]
+        :local ids 
+        :do {
+            set ids [/ip firewall connection find where (dst-address ~ $dstIp orig-rate > $threshold) ] 
+        } on-error={
+            set ids ({})
+        }
         :put ("Match rule ids count:" . [:len $ids])
         if ([:len $ids] > 0) do={
             :put ("ids:" . [tostr $ids])
@@ -121,13 +70,15 @@
                 set conPos ($conPos + 1)
             }
         }
+        :put ("connections:" . [tostr $connections])
+        :put ("connections count:" . [:len $connections ])
     }
     return $connections
 }
 
 # 将 connections 数组对象转换为 Json 的数组
 :local convertConnectionsToJsonString do={
-    :local connections $1
+    :local array $1
     :local jsonString "["
     # 查询 ip 归属地
     :local getIpRegion do={
@@ -178,11 +129,11 @@
         :set data ($result->"data")
         return ([$getCountryCode $data] . "." . [$getRegion $data] . "." . [$getCity $data])
     }
-    :foreach connection in=$connections do={
-        :local ip ($connection->"ip")
-        :local port ($connection->"port")
-        :local protocol ($connection->"protocol")
-        :local origRate ($connection->"origRate")
+    :foreach connectioned in=$array do={
+        :local ip ($connectioned->"ip")
+        :local port ($connectioned->"port")
+        :local protocol ($connectioned->"protocol")
+        :local origRate ($connectioned->"origRate")
         :local ipRegion [$getIpRegion $ip]
         :local arrayString "{\"ip\":\"$ip\",\"port\":\"$port\",\"protocol\":\"$protocol\",\"origRate\":\"$origRate\",\"ipRegion\":\"$ipRegion\"}"
         :set jsonString ($jsonString . "$arrayString,")
@@ -208,13 +159,14 @@
 :local count [$checkFirwareCount]
 if ($count > 0) do={
     # 查询符合流量阈值的链接
-    :set connections [$getConnections IpAddress=$ezvizIpAddress threshold=$trafficThreshold]
+    :set connectionArray [$getConnections IpAddress=$ezvizIpAddress threshold=$trafficThreshold]
     # 获取符合链接数量
-    :set connectionCount [:len $connections]
+    :set connectionCount [:len $connectionArray]
+    :put "connectionCount: $connectionCount"
     if (($"nvr::nvrRemoteLink" != $TRUE) && ($connectionCount > 0)) do={
         :put "on"
         # 将链接转为 json array 字符串
-        :local connectionString [$convertConnectionsToJsonString $connections]
+        :local connectionString [$convertConnectionsToJsonString $connectionArray]
         :put "{\"state\":\"ON\",\"connection\":$connectionString}"
         /iot mqtt publish broker=$mqttBroker topic=/ros/nvrRemoteLink message="{\"state\":\"ON\",\"connection\":$connectionString}"
         :set "nvr::nvrRemoteLink" $TRUE
