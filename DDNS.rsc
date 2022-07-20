@@ -227,7 +227,7 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
             if (! ($scriptResult->"result")) do={
                 $logger error ("[$logTag] " . ($scriptResult->"logMessage"))
                 if (($"DDNS::WecomMsg"->"$ddnsServiceName") = "NOTSET") do={
-                    $"Wecom::send" ("\E2\9A\A0\EF\B8\8F DDNS Service [$ddnsServiceName] update fail! Log messige:" . ($scriptResult->"logMessage"))
+                    $"Wecom::send" ("## \E2\9D\8C DDNS update fail!\nDDNS Service **[$ddnsServiceName]** update fail! Log messige:\n>" . ($scriptResult->"logMessage")) markdown="true"
                     set ($"DDNS::WecomMsg"->"$ddnsServiceName") "DDNS update fail!"
                 }
                 :error message=("[$ddnsServiceName] error:" . ($scriptResult->"logMessage"))
@@ -241,12 +241,12 @@ if ($wanIpv4Address != $ipv4Address || $wanIpv6Prefix != $ipv6Prefix) do= {
     :set wanIpv4Address $ipv4Address;
     if ($useIPv6) do={
         :set wanIpv6Prefix $ipv6Prefix;
-        $"Wecom::send" ("\F0\9F\9F\A6 $wanInterfaceName ipv4 address update to $wanIpv4Address, ipv6 suffix update to $wanIpv6Prefix")
+        $"Wecom::send" ("### \E2\9C\85 ddns update task complete\n ### $wanInterfaceName\n- **ipv4 address:** $wanIpv4Address\n- **ipv6 suffix:** $wanIpv6Prefix") markdown="true"
     } else={
-        $"Wecom::send" ("\F0\9F\9F\A6 $wanInterfaceName ipv4 address update to $wanIpv4Address")
+        $"Wecom::send" ("### \E2\9C\85 ddns update task complete\n ### $wanInterfaceName\n- **ipv4 address:** $wanIpv4Address") markdown="true"
     }
     if ($wanIpv4Address in 100.64.0.0/10) do={
-        $"Wecom::send" ("\E2\9A\A0\EF\B8\8F $wanInterfaceName ipv4 address is $wanIpv4Address, this address is not a public IP address, please contact the telecom operator.")
+        $"Wecom::send" ("\E2\9D\97 ##ip address is not public ip\n>$wanInterfaceName ipv4 address is $wanIpv4Address, this address is not a public IP address, please contact the telecom operator.") markdown="true"
     }
 } else={
     $logger debug ("[$logTag] IP address is up to date.")
