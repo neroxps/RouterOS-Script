@@ -35,6 +35,8 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
 ## 4. 支持单独定义 touser ，如某个脚本希望单独推送给特定用户。支持 string 或 array 类型
 ### $"Wecom::send" <message text> touser={"user1","user2"...}}
 ### $"Wecom::send" <message text> touser="user1"
+## 5. 支持 Markdown 传入
+### $"Wecom::send" (#title1\n## title2) touser="user1" markdown=true
 :global "Wecom::send" do={
     # local variable
     :local logTag "Wecom::send"
@@ -137,6 +139,11 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :local wecomSendUrl ("https://qyapi.weixin.qq.com/cgi-bin/message/send\?access_token=$token");
         :local msg "[From MikroTik] $message"
         :local payload "{\"touser\":$($config->"touser"),\"msgtype\":\"text\",\"agentid\":$($config->"agentid"),\"text\":{\"content\":\"$msg\"},\"safe\":0}";
+        if ($markdown = "true") do={
+            :put "set markdown"
+            :set msg ("$message")
+            set payload "{\"touser\":$($config->"touser"),\"msgtype\":\"markdown\",\"agentid\":$($config->"agentid"),\"markdown\":{\"content\":\"$msg\"},\"safe\":0}";
+        }
         :local result [/tool fetch url=$wecomSendUrl mode=https output=user http-method=post http-data=$payload as-value];
         :local resultStr [:tostr $result;]
         $logger debug ("[$logTag] Wecom api push result:$resultStr")
