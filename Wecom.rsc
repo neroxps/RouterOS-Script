@@ -140,7 +140,7 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :local msg "[From MikroTik] $message"
         :local payload "{\"touser\":$($config->"touser"),\"msgtype\":\"text\",\"agentid\":$($config->"agentid"),\"text\":{\"content\":\"$msg\"},\"safe\":0}";
         if ($markdown = "true") do={
-            :set msg ("# From mikrotik message\n$message")
+            :set msg ("$message")
             set payload "{\"touser\":$($config->"touser"),\"msgtype\":\"markdown\",\"agentid\":$($config->"agentid"),\"markdown\":{\"content\":\"$msg\"},\"safe\":0}";
         }
         :local result [/tool fetch url=$wecomSendUrl mode=https output=user http-method=post http-data=$payload as-value];
