@@ -223,3 +223,32 @@ if (! ($pushResult->"result")) do={
 # 如果有多个 pppoe 请指定接口名字,如果希望脚本自动获取请留空即可
 # :local pppoeInterfaceName "<pppoe interface name>"
 ```
+
+## update_wan_ip_to_firwall_address_list.src 获取 WAN ip 更新至防火墙地址列表
+
+Mikrotik 设置 nat loop backup 好只能通过wan口目的地址来区分局域网到 WAN 口的流量，还有 ipv6 防火墙转发表地址对外服务放行，都需要将动态地址配置到防火墙的 address-list 内。
+最开始这个脚本的功能我是做到 ddns，因为很类似，但最近我加了一个 pppoe 拨号就出问题，所以我把 DDNS 脚本的这个功能分离出来，将它设定成一个独立的脚本。
+
+脚本会自动寻找 pppoe client 类型的接口，获取所有的 ipv4 ipv6 。
+
+### 脚本使用
+
+配置脚本头部的 CONFIG 数组
+- ipv4ListName: 字符串类型，ipv4 防火墙的 address-list listName
+- ipv6ListName：数组类型 {"listName":{"第一个ipv6后缀";"第二个ipv6后缀"}}，一个listname 可对应多个 ipv6地址
+
+### 完整配置范例
+
+```
+:local CONFIG {
+    "ipv4ListName"= "wan-ip";
+    "ipv6ListName"={
+        "dsm_ip"={
+            "fadb:cadf:fadb:dadb";
+        };
+        "omv_ip"={
+            "edd8:cfff:feee:bbbb";
+        };
+    }
+}
+```
