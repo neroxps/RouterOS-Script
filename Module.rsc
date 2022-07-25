@@ -183,7 +183,7 @@
     if ( ([ :len ($"Module::lock"->$moduleName )] < 2) || ($force = true) ) do={
         # 强制卸载清空模块锁
         if ($force = true) do={ :set ($"Module::lock"->$moduleName ) "|"}
-        :local regex ("^$moduleName")
+        :local regex ("^$moduleName(::|\$)")
         if ($"Module::logLevel" <= 10) do={:put ("[debug] [$logTag] remove all modules named $moduleName.")}
         system script environment remove [/system script environment find where name~$regex]
     } else={
