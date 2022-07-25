@@ -2,7 +2,7 @@
 # 可以新建定时脚本，每分钟执行一次定时修改 wan-ip 列表
 # /system scheduler
 # add interval=1m name=update_wan_ip on-event=update_wan_ip policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive,romon start-time=startup
-:local PPPOEINTERFACES [/interface pppoe-client print as-value]
+:local PPPOEINTERFACES [/interface pppoe-client print as-value where running=yes ]
 :local CONFIG {
     "ipv4ListName"= "wan-ip";
     "ipv6ListName"={
