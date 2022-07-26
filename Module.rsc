@@ -98,7 +98,8 @@
     :global "Module::logTag"
     :local logTag ("$"Module::logTag"::isLoaded")
     :local module $1
-    if ( [:len [/system script environment find name~("^$module")] ] > 0 ) do={
+    :local regex ("^$module(::|\$)")
+    if ( [:len [/system script environment find name~$regex] ] > 0 ) do={
         if ($"Module::logLevel" <= 20) do={:put ("[info] [$logTag] Module [$module] is loaded.");}
         return true
     } else={
@@ -145,6 +146,7 @@
         if ( [:len [/file find name=("$module.rsc")]] > 0 ) do={
             if ($"Module::logLevel" <= 10) do={:put ("[debug] [$logTag] Load modules via file [$module.rsc]")}
             /import "$module.rsc"
+            delay 1s
             if ( ![$"Module::isLoaded" $module] ) do={
                 :error ("[error] [$logTag] Module $module.rsc load failed！");
             }
