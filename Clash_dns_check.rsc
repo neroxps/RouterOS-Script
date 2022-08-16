@@ -5,47 +5,45 @@
 :local telecomDns 202.96.128.166;
 :local clashForwardnRule [/ip firewall mangle find comment="Clash-out"];
 
-# import Module
+# local variable
 :local logTag "Clash_dns_check"
 :local scriptName $logTag
-:global "Module::import"
-if ( !any $"Module::import" ) do={
-    do {/system script run [find name=Module]} on-error={:error "Script Module not found!"}
+# 脚本日志级别
+:local logLevel "DEBUG"
+
+# Load module
+:global loadModule; if ( !any $loadModule ) do={
+    do {/system script run [find name=loadModule]} on-error={:error "Script loadModule not found!"}
 }
-:global "Module::remove"
 
 # import logger
-$"Module::import" logger $scriptName
-:global logger
+:local logger ([ $loadModule logger init=({"logTag"=$logTag;"level"=$logLevel;}) ]->"logger")
 
 # import Wecom
-$"Module::import" Wecom $scriptName
-:global "Wecom::send"
-
-# 设置模块日志级别-如果需要 debug 模块请取消注释，在控制台执行脚本
-:global  scriptLogLevel
-:set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"INFO")
+:local WecomArr [ $loadModule Wecom ]
+:local WecomSend ($WecomArr->"send")
+:local WecomDep ($WecomArr->"Dep")
 
 # 微信推送标记，防止重复推送
 :global "CheckDns::WecomMsg"
 
 :set dnsStatus true;
-$logger ("[$logTag] Script $scriptName starting")
+$logger debug ("Script $scriptName starting")
 :do {
     :local result [ :resolve www.google.com server=$clashDns ]
     # 如果 clashDns 获得的解析不是 fake-ip 那证明 DNS 有问题。微信推送处理。
     if ( $result in 198.18.0.0/16 ) do={
-        $logger ("[$logTag] google ipaddress:$result is fake-ip.")
+        $logger debug ("google ipaddress:$result is fake-ip.")
         if ($"CheckDns::WecomMsg" != "NOTSET") do={
             :set $"CheckDns::WecomMsg" "NOTSET";
-            $"Wecom::send" "clash dns resolution has returned to normal.";
+            $WecomSend "clash dns resolution has returned to normal." Dep=$WecomDep;
         }
     } else={
-        $logger error ("[$logTag] google ipaddress:$result is not fake-ip.")
+        $logger error ("google ipaddress:$result is not fake-ip.")
         # 防止重复推送
         if ($"CheckDns::WecomMsg" != "noFakeIP") do={
             :set $"CheckDns::WecomMsg" "noFakeIP";
-            $"Wecom::send" "Notice! The Google IP queried is not fake-ip, please deal with it in time.";
+            $WecomSend "Notice! The Google IP queried is not fake-ip, please deal with it in time."  Dep=$WecomDep;
         }
     };
 } on-error={
@@ -61,25 +59,22 @@ $logger ("[$logTag] Script $scriptName starting")
 
 if ($dnsStatus) do={
     if ([/ip dns get servers] != $clashDns) do={
-        $logger info ("[$logTag] Set DNS to Clash DNS.")
+        $logger info ("Set DNS to Clash DNS.")
         /ip dns set servers=$clashDns;
-        $logger info ("[$logTag] set dns success");
+        $logger info ("set dns success");
         /ip dns cache flush; 
         /ip firewall mangle enable $clashForwardnRule;
-        $logger info ("[$logTag] Enable Clash forwarding rules.");
-        $"Wecom::send" "Clash DNS is working!"
+        $logger info ("Enable Clash forwarding rules.");
+        $WecomSend "Clash DNS is working!"  Dep=$WecomDep
     }
 } else={
     if ([/ip dns get servers] != $telecomDns) do={
-        $logger error ("[$logTag] Clash DNS is notwork!");
-        $logger info ("[$logTag] Set DNS to telecom operators DNS.")
+        $logger error ("Clash DNS is notwork!");
+        $logger info ("Set DNS to telecom operators DNS.")
         /ip dns set servers=$telecomDns;
         /ip dns cache flush;
         /ip firewall mangle disable $clashForwardnRule;
-        $logger info ("[$logTag] Disable Clash forwarding rules.");
-        $"Wecom::send" "Clash DNS is notwork!";
+        $logger info ("Disable Clash forwarding rules.");
+        $WecomSend "Clash DNS is notwork!"  Dep=$WecomDep;
     }
 }
-
-$"Module::remove" Wecom $scriptName
-$"Module::remove" logger $scriptName

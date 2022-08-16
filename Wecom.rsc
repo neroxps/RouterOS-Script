@@ -2,60 +2,78 @@
 # 脚本说明： 利用全局变量传入参数后，调用本脚本进行企业微信推送
 # 可以在本脚本定义 Wecom 配置，也可以在调用处定义。
 
-# 全局配置参数 "Wecom::config"
+# example
+# :global loadModule; if ( !any $loadModule ) do={
+#     do {/system script run [find name=loadModule]} on-error={:error "Script loadModule not found!"}
+# }
+# :local WecomArr [ $loadModule Wecom ]
+# :local WecomSend ($WecomArr->"send")
+# :local WecomDep ($WecomArr->"Dep")
+# $WecomSend Dep=$WecomDep "Hello World"
+
+
+# 全局配置参数 CONFIG
 ## corpid 企业微信企业ID corpid
 ## corpsecret 企业微信应用 corpsecret
 ## agentid 企业微信应用ID agentid
 ## touser发送给企业微信的用户ID如 "user1" 多个用户可以这样写 {"user1";"user2"}，mikrotik 数组形式
-:global "Wecom::config" {
+# :local CONFIG {
+#     "corpid"="Change to your corpid";
+#     "corpsecret"="Change to your corpsecret";
+#     "agentid"="Change to your agentid";
+#     "touser"={"user1";"user2"}
+# }
+
+:local CONFIG {
     "corpid"="Change to your corpid";
     "corpsecret"="Change to your corpsecret";
     "agentid"="Change to your agentid";
     "touser"={"user1";"user2"}
 }
 
+# local variable
+:local logTag "Wecom"
+:local scriptName $logTag
+# 脚本日志级别
+:local logLevel "DEBUG"
+
+# Load module
+:global loadModule; if ( !any $loadModule ) do={
+    do {/system script run [find name=loadModule]} on-error={:error "Script loadModule not found!"}
+}
+
+# import logger
+:local logger ([ $loadModule logger init=({"logTag"=$logTag;"level"=$logLevel;}) ]->"logger")
+
 # 控制是否发送企业微信开关
 :global "Wecom::sendToWecom"
 if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     :global "Wecom::sendToWecom" true
-    $logger debug ("[$logTag] WeCom notification is enable")
+    $logger debug ("WeCom notification is enable")
 }
 
 
 # 发送消息到企业微信
 # 使用方法：
-## 1. 如果在脚本中定义了全局变量 $"Wecom::config"，可以直接发送
-### $"Wecom::send" <message text>
+## 1. 如果在脚本中定义了全局变量 $CONFIG，可以直接发送
+### $send <message text>
 ## 2. 如果希望临时修改企业微信接受者可以这样写
-## $"Wecom::send" <message text> touser={"user1","user2"...}
+## $send <message text> touser={"user1","user2"...}
 ## 3. 如果希望临时修改企业微信配置文件可以通过 input 传入，参数类型是 array，或直接以参数形式传入。
 ### 配置优先级传入参数 > 脚本配置
-### $"Wecom::send" <message text> input={"corpid"=<$corpid>,"corpsecret"=<$corpsecret>,"agentid"=<$agentid>,"touser"={"user1","user2"...}}
-### $"Wecom::send" <message text> corpid=<$corpid> corpsecret=<$corpsecret> agentid=<$agentid> touser={"user1","user2"...}}
+### $send <message text> input={"corpid"=<$corpid>,"corpsecret"=<$corpsecret>,"agentid"=<$agentid>,"touser"={"user1","user2"...}}
+### $send <message text> corpid=<$corpid> corpsecret=<$corpsecret> agentid=<$agentid> touser={"user1","user2"...}}
 ## 4. 支持单独定义 touser ，如某个脚本希望单独推送给特定用户。支持 string 或 array 类型
-### $"Wecom::send" <message text> touser={"user1","user2"...}}
-### $"Wecom::send" <message text> touser="user1"
+### $send <message text> touser={"user1","user2"...}}
+### $send <message text> touser="user1"
 ## 5. 支持 Markdown 传入
-### $"Wecom::send" (#title1\n## title2) touser="user1" markdown=true
-:global "Wecom::send" do={
+### $send (#title1\n## title2) touser="user1" markdown=true
+:local "send" do={
     # local variable
-    :local logTag "Wecom::send"
-    :local scriptName $logTag
-    # import Module
-    :global "Module::import"
-    if ( !any $"Module::import" ) do={
-        do {/system script run [find name=Module]} on-error={:error "Script Module not found!"}
-    }
-    $"Module::import" logger $scriptName
-    :global "Module::remove"
-    :global logger
-    
-    # 设置模块日志级别-如果需要 debug 模块请取消注释，在控制台执行脚本
-    # :global  scriptLogLevel
-    # :set ($scriptLogLevel->"modulesLevel"->$logTag) ($scriptLogLevel->"DEBUG")
-
-    # function variable
-    :global "Wecom::config";
+    :local logTag "send"
+    if ( ! any $Dep ) do={ :error message=("[Wecom] [$logTag] Dep(Dependency) is not defined!") }
+    :local logger ($Dep->"logger")
+    :local CONFIG ($Dep->"CONFIG")
     :global "Wecom::sendToWecom"
     :local message $1
     :local config
@@ -63,9 +81,10 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     # subFunction
     ## 检查配置参数是否正确
     :local checkConfig do={
-        :global logger
         :local args $1
-        :local logTag "Wecom::send::checkConfig"
+        :local logTag "send::checkConfig"
+        if ( ! any $Dep ) do={ :error message=("[Wecom] [$logTag] Dep(Dependency) is not defined!") }
+        :local logger ($Dep->"logger")
         if ([:len $args] = 0) do={
             $logger ("[$logTag] args is zero!")
             return false
@@ -88,19 +107,23 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :set inputConfig $input
     }
     $logger debug ("[$logTag] check incoming parameter.")
-    if ( ([:typeof $inputConfig] = "nothing") && ([:typeof $corpid] = "str") && ([:typeof $corpsecret] = "str") && ([:typeof $agentid] = "str") && ([:typeof $touser] = "array") ) do={
+    if ( ([:typeof $inputConfig] = "nothing") && \
+        ([:typeof $corpid] = "str") && \
+        ([:typeof $corpsecret] = "str") && \
+        ([:typeof $agentid] = "str") && \
+        ([:typeof $touser] = "array") ) do={
         $logger ("[$logTag] Apply incoming parameter to inputConfig.")
         :set inputConfig {"corpid"=$corpid;"corpsecret"=$corpsecret;"agentid"=$agentid;"touser"=$touser}
     }
     $logger debug ("[$logTag] check \$inputConfig.")
-    if ([$checkConfig $inputConfig]) do={
+    if ([$checkConfig $inputConfig Dep=$Dep]) do={
         $logger ("[$logTag] Apply incoming parameter configuration.")
         :set config $inputConfig
     }
-    $logger debug ("[$logTag] check \$Wecom::config.")
-    if ( ([typeof $config] = "nothing") && ([$checkConfig $"Wecom::config"])) do={
+    $logger debug ("[$logTag] check \$CONFIG")
+    if ( ([typeof $config] = "nothing") && ([$checkConfig $CONFIG Dep=$Dep])) do={
         $logger ("[$logTag] Apply global variable configuration.")
-        :set config $"Wecom::config"
+        :set config $CONFIG
         # touser 以传入为准作为覆盖
         if ([:len $touser] > 0)  do={
             # touser 是数组，作为参数传入，覆盖$config->touser 配置
@@ -140,7 +163,7 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
         :local msg "[From MikroTik] $message"
         :local payload "{\"touser\":$($config->"touser"),\"msgtype\":\"text\",\"agentid\":$($config->"agentid"),\"text\":{\"content\":\"$msg\"},\"safe\":0}";
         if ($markdown = "true") do={
-            :set msg ("$message")
+            :set msg $message
             set payload "{\"touser\":$($config->"touser"),\"msgtype\":\"markdown\",\"agentid\":$($config->"agentid"),\"markdown\":{\"content\":\"$msg\"},\"safe\":0}";
         }
         :local result [/tool fetch url=$wecomSendUrl mode=https output=user http-method=post http-data=$payload as-value];
@@ -152,7 +175,32 @@ if ([:typeof $"Wecom::sendToWecom"] = "nothing") do={
     } else={
         $logger debug ("[$logTag] Wecom::sendToWecom is false.")
     }
-    # remove module
-    $"Module::remove" logger $scriptName
 }
 
+# 逐行组装推送消息
+## 必须输入参数：
+## - msgArr 数组形式
+## - msg 传入的字符串单行
+## 返回 msg 新数组
+:local setMessage do={
+    :local logTag "setMessage"
+    :local msgArray $msgArr
+    if ( ! any $Dep ) do={ :error message=("[Wecom] [$logTag] Dep(Dependency) is not defined!") }
+    :local logger ($Dep->"logger")
+    if (! any $msgArr) do={ :error message=("[Wecom] [$logTag] msgArr is not defined!") }
+    if (! any $msg) do={
+        $logger debug ("[$logTag] msg is not defined!")
+        set (msgArray->[:len $msgArray]) ""
+    }
+    
+
+}
+
+return {
+    "moduleName"="Wecom";
+    "send"=$send;
+    "Dep"={
+        "CONFIG"=$CONFIG;
+        "logger"=$logger;
+    }
+}
